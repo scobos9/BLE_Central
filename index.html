@@ -1,7 +1,6 @@
 <!--
-  Rui Santos
+  "index.html" web BLE app, works with "BLE_Central.ino" running on ESP32
   Complete project details at https://RandomNerdTutorials.com/esp32-web-bluetooth/
-
   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files.
   The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 -->
@@ -70,7 +69,10 @@
     var bleServer;
     var bleServiceFound;
     var sensorCharacteristicFound;
-
+    
+    // The Connect To BLE Device button will trigger the connectToDevice() function. 
+    // But first, we check if the Web BLE Javascript API is available in your browser before 
+    // proceeding and we display a message on the bleStateContainer in case Web BLE is not supported.
     // Connect Button (search for BLE Devices only if BLE is available)
     connectButton.addEventListener('click', (event) => {
         if (isWebBluetoothEnabled()){
@@ -96,6 +98,10 @@
         return true
     }
 
+    // The following lines of code search for BLE Devices with the name 
+    // and Service that we’ve defined. There are other filters you can define 
+    // to search for BLE devices, or you can opt to not add any 
+    // filters and return all the BLE devices found.
     // Connect to BLE Device and Enable Notifications
     function connectToDevice(){
         console.log('Initializing Bluetooth...');
@@ -103,6 +109,10 @@
             filters: [{name: deviceName}],
             optionalServices: [bleService]
         })
+        
+        // Once we’ve connected to your device, we display on the HTML interface 
+        // that we are now connected to our device. We also add an event listener 
+        // to our device, in case it disconnects (it will call the onDisconnected function).
         .then(device => {
             console.log('Device Selected:', device.name);
             bleStateContainer.innerHTML = 'Connected to device ' + device.name;
@@ -110,16 +120,33 @@
             device.addEventListener('gattservicedisconnected', onDisconnected);
             return device.gatt.connect();
         })
+        
+        // From the device, we can get our GATT server (the hierarchical 
+        // structure that stores data in BLE protocol). We save our GATT 
+        // server on our bleServer global variable. From the GATTT server, 
+        // we can get the service with the UUID we’ve defined at 
+        // the beginning of the code, bleService.
         .then(gattServer =>{
             bleServer = gattServer;
             console.log("Connected to GATT Server");
             return bleServer.getPrimaryService(bleService);
         })
+        
+        // Once we’ve found our service, we save it on the global variable 
+        // bleServiceFound, and get the sensor characteristic from the service.
         .then(service => {
             bleServiceFound = service;
             console.log("Service discovered:", service.uuid);
             return service.getCharacteristic(sensorCharacteristic);
         })
+        
+        // Now that we’ve found our sensor characteristic, we assigned 
+        // it to the global sensorCharacteristicFound variable. We add 
+        // an event listener to our characteristic to handle what happens 
+        // when the characteristic value changes—we call the 
+        // handleCharacteristicChange function. We also start notifications 
+        // on that characteristic. Finally, we return the current 
+        // value written on the characteristic.
         .then(characteristic => {
             console.log("Characteristic discovered:", characteristic.uuid);
             sensorCharacteristicFound = characteristic;
@@ -128,6 +155,9 @@
             console.log("Notifications Started.");
             return characteristic.readValue();
         })
+        
+        // Next, we display the value read from the characteristic 
+        // on the corresponding HTML element.
         .then(value => {
             console.log("Read value: ", value);
             const decodedValue = new TextDecoder().decode(value);
@@ -146,7 +176,12 @@
 
         connectToDevice();
     }
-
+    
+    // The handleCharacteristicChange() function will be called when the 
+    // sensor characteristic value changes. That function gets the new value 
+    // written on the characteristic and places it on the corresponding 
+    // HTML element. Additionally, we also get the date and time to display 
+    // when was the last time that the characteristic value has changed.
     function handleCharacteristicChange(event){
         const newValueReceived = new TextDecoder().decode(event.target.value);
         console.log("Characteristic value changed: ", newValueReceived);
@@ -154,6 +189,11 @@
         timestampContainer.innerHTML = getDateTime();
     }
 
+    // When you click on the ON or OFF buttons, the writeOnCharacteristicfunction 
+    // will be called. That function first checks if we are connected to the 
+    // BLE server. If we are, it gets the LED characteristic from the BLE Service 
+    // we’ve found previously, and it writes the value we’ve passed 
+    // as an argument on the characteristic.
     function writeOnCharacteristic(value){
         if (bleServer && bleServer.connected) {
             bleServiceFound.getCharacteristic(ledCharacteristic)
@@ -162,6 +202,9 @@
                 const data = new Uint8Array([value]);
                 return characteristic.writeValue(data);
             })
+            
+            // If we’re successful in writing to the characteristic, 
+            // we update the last value written on the HTML interface.
             .then(() => {
                 latestValueSent.innerHTML = value;
                 console.log("Value written to LEDcharacteristic:", value);
@@ -169,12 +212,20 @@
             .catch(error => {
                 console.error("Error writing to the LED characteristic: ", error);
             });
+          
+          // In case we try to write to the characteristic without being connected 
+          // to BLE first, we’ll create a pop-up window that we need to connect to BLE first.
         } else {
             console.error ("Bluetooth is not connected. Cannot write to characteristic.")
             window.alert("Bluetooth is not connected. Cannot write to characteristic. \n Connect to BLE first!")
         }
     }
 
+    // When you click on the Disconnect BLE Device button, the disconnectDevice() 
+    // function is called. This function first checks if we’re connected to the 
+    // server. Then, we stop the notifications on the sensorCharacteristic and we 
+    // disconnect from the GATT server. Additionally, we also display some messages 
+    // on the HTML interface and a pop-up window in case Bluetooth is not connected.
     function disconnectDevice() {
         console.log("Disconnect Device.");
         if (bleServer && bleServer.connected) {
